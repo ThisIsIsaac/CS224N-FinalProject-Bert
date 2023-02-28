@@ -40,14 +40,25 @@ class BertSelfAttention(nn.Module):
     # and get back a score matrix S of [bs, num_attention_heads, seq_len, seq_len]
     # S[*, i, j, k] represents the (unnormalized)attention score between the j-th and k-th token, given by i-th attention head
     # before normalizing the scores, use the attention mask to mask out the padding token scores
-    # Note again: in the attention_mask non-padding tokens with 0 and padding tokens with a large negative number 
+    # Note again: in the attention_mask non-padding tokens with 0 and padding tokens with a large negative number
+    Bk, Tk, Ck = key.size()
+    Bq, Tq, Cq = query.size()
+
+    att = query @ key.tranpose(-2, -1) * (1.0 / math.sqrt(key.size(-1)))
+
+    if attention_mask is not None:
+      att = att.masked_fill_(attention_mask[:, :, :Tq, :Tk], -float('inf'))
+
+    att = F.softmax(att, dim=-1)
+    att = self.dropout(att)
 
     # normalize the scores
     # multiply the attention scores to the value and get back V'
     # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
-
-    ### TODO
-    raise NotImplementedError
+    y = att @ value
+    B = max(Bk, Bq)
+    y = y.tranpose(1, 2).contiguous().view(B, Tq, Cq)
+    return y
 
 
   def forward(self, hidden_states, attention_mask):
